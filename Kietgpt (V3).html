@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>KietGPT v5</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
+<style>
+body{
+margin:0;
+font-family:'Inter',sans-serif;
+background:#0b1220;
+color:white;
+display:flex;
+height:100vh;
+}
+
+/* SIDEBAR */
+.sidebar{
+width:240px;
+background:#020617;
+padding:15px;
+display:flex;
+flex-direction:column;
+border-right:1px solid rgba(255,255,255,0.1);
+}
+
+.logo{
+font-weight:600;
+font-size:18px;
+margin-bottom:15px;
+}
+
+.newchat{
+padding:10px;
+border:none;
+border-radius:10px;
+background:#2563eb;
+color:white;
+cursor:pointer;
+}
+
+/* MAIN */
+.main{
+flex:1;
+display:flex;
+flex-direction:column;
+}
+
+.header{
+padding:15px;
+border-bottom:1px solid rgba(255,255,255,0.1);
+display:flex;
+justify-content:space-between;
+}
+
+.status{
+font-size:12px;
+opacity:0.7;
+}
+
+/* CHAT */
+.chat{
+flex:1;
+overflow-y:auto;
+padding:20px;
+display:flex;
+flex-direction:column;
+gap:12px;
+}
+
+.msg{
+display:flex;
+gap:10px;
+max-width:70%;
+}
+
+.user{
+align-self:flex-end;
+flex-direction:row-reverse;
+}
+
+.avatar{
+width:32px;
+height:32px;
+border-radius:50%;
+}
+
+.bubble{
+padding:10px 14px;
+border-radius:12px;
+white-space:pre-wrap;
+}
+
+.user .bubble{
+background:#2563eb;
+}
+
+.bot .bubble{
+background:#1e293b;
+}
+
+/* INPUT */
+.input-area{
+padding:15px;
+border-top:1px solid rgba(255,255,255,0.1);
+}
+
+input{
+width:100%;
+padding:12px;
+border-radius:10px;
+border:none;
+outline:none;
+background:#020617;
+color:white;
+}
+
+.hint{
+text-align:center;
+font-size:12px;
+opacity:0.5;
+margin-top:5px;
+}
+
+.typing{
+opacity:0.6;
+font-style:italic;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="sidebar">
+<div class="logo">KietGPT 🤖</div>
+<button class="newchat" onclick="newChat()">+ New Chat</button>
+</div>
+
+<div class="main">
+
+<div class="header">
+<div>Chat</div>
+<div class="status">Online</div>
+</div>
+
+<div class="chat" id="chat"></div>
+
+<div class="input-area">
+<input id="input" placeholder="Nhấn / để chat..." />
+<div class="hint">Press / to chat</div>
+</div>
+
+</div>
+
+<script>
+
+const API_URL="https://openrouter.ai/api/v1/chat/completions"
+const API_KEY="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"
+
+let messages=[{
+role:"system",
+content:"Bạn là KietGPT. Luôn trả lời bằng tiếng Việt, dễ hiểu và được tạo bởi Kiệt."
+}]
+
+const chat=document.getElementById("chat")
+const input=document.getElementById("input")
+
+function addMessage(text,type){
+let msg=document.createElement("div")
+msg.className="msg "+type
+
+let avatar=document.createElement("img")
+avatar.className="avatar"
+avatar.src = type==="user"
+? "https://i.imgur.com/7k12EPD.png"
+: "https://i.imgur.com/4AiXzf8.png"
+
+let bubble=document.createElement("div")
+bubble.className="bubble"
+bubble.innerText=text
+
+msg.appendChild(avatar)
+msg.appendChild(bubble)
+
+chat.appendChild(msg)
+chat.scrollTop=chat.scrollHeight
+}
+
+function loading(){
+let msg=document.createElement("div")
+msg.className="msg bot typing"
+msg.innerHTML=`
+<img class="avatar" src="https://i.imgur.com/4AiXzf8.png">
+<div class="bubble">KietGPT đang suy nghĩ...</div>
+`
+chat.appendChild(msg)
+chat.scrollTop=chat.scrollHeight
+return msg
+}
+
+function typeText(text){
+let i=0
+let msg=document.createElement("div")
+msg.className="msg bot"
+msg.innerHTML=`
+<img class="avatar" src="https://i.imgur.com/4AiXzf8.png">
+<div class="bubble"></div>
+`
+chat.appendChild(msg)
+
+let bubble=msg.querySelector(".bubble")
+
+let interval=setInterval(()=>{
+bubble.innerText += text[i]
+i++
+chat.scrollTop=chat.scrollHeight
+if(i>=text.length) clearInterval(interval)
+},15)
+}
+
+async function send(){
+let text=input.value.trim()
+if(!text) return
+
+addMessage(text,"user")
+messages.push({role:"user",content:text})
+input.value=""
+input.blur()
+
+let load=loading()
+
+try{
+let res=await fetch(API_URL,{
+method:"POST",
+headers:{
+"Content-Type":"application/json",
+"Authorization":"Bearer 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"
+},
+body:JSON.stringify({
+model:"nvidia/nemotron-3-nano-30b-a3b:free",
+messages:messages
+})
+})
+
+let data=await res.json()
+load.remove()
+
+if(!data.choices){
+addMessage("AI lỗi hoặc hết free 😢","bot")
+return
+}
+
+let reply=data.choices[0].message.content
+typeText(reply)
+
+messages.push({role:"assistant",content:reply})
+
+}catch(e){
+load.remove()
+addMessage("Lỗi kết nối 😢","bot")
+}
+}
+
+// Enter gửi
+input.addEventListener("keydown", e=>{
+if(e.key==="Enter") send()
+})
+
+// 🎮 ROBLOX STYLE: nhấn / để chat
+document.addEventListener("keydown", e=>{
+if(e.key==="/" && document.activeElement!==input){
+e.preventDefault()
+input.focus()
+}
+})
+
+// new chat
+function newChat(){
+chat.innerHTML=""
+messages=[messages[0]]
+}
+
+</script>
+
+</body>
+</html>
